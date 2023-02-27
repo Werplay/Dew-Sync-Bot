@@ -15,12 +15,18 @@ import { configService } from '../config/configuration';
 import { ethers } from 'ethers';
 
 const _ = require('lodash');
-const cron = require('node-cron');
 
 @Controller('')
 export class APIcontroller {
   constructor(private readonly apiService: APIservice) {
-    // this.getBalance([]);
+    // this.test();
+  }
+
+  private async test() {
+    for (let i = 0; i < 20; i++) {
+      await this.getBalance([]);
+      await this.apiService.delay(2);
+    }
   }
 
   @Post('balance/:address?:limit?:page?:order?') async getBalance(

@@ -39,49 +39,86 @@ export class APIservice {
       await this.connectToMongo();
       await this.connectToMoralis();
 
-      const currentBlock = await provider.getBlockNumber();
-
-      const toAddresses = await this.getToAddressesFromMoralis();
-
-      const walletData: wallet[] = [];
-
-      await this.fillToAddressWithData(walletData, toAddresses, currentBlock);
-
-      // await this.addDataToMongo(walletData);
-
-      return { res: walletData, tr: _.size(walletData) };
       const tr = await wallets.count();
-      if (address != null) {
-        const res = await wallets
-          .findOne({
-            address: address,
-          })
-          .select(['-_id'])
-          .lean();
-        return { res, tr };
-      }
-
-      const res = await wallets
-        .find({
-          address: {
-            $nin: [
-              '0x0000000000000000000000000000000000000000', // Zero Address
-            ],
-          },
-        })
+      const mongoResult = await wallets
+        .find({})
         .select(['-_id'])
         .sort({ blockLastSynced: 'desc' })
-        .skip(limit * page)
-        .limit(limit)
         .lean();
 
-      return { res, tr };
+      const now = new Date();
+
+      if (_.size(mongoResult) == 0) {
+        this.refreshTokenHolders();
+      } else if (
+        mongoResult[0]?.blockLastSynced + 10 <
+        Math.floor(now.getTime() / 1000)
+      ) {
+        this.refreshTokenHolders();
+      }
+
+      return { res: mongoResult, tr: tr };
     } catch (e) {
       console.log(e);
       return HttpStatus.BAD_REQUEST;
     }
   }
 
+  private async refreshTokenHolders() {
+    try {
+      const walletData: wallet[] = [];
+
+      const currentBlock = await provider.getBlockNumber();
+      const toAddresses = await this.getToAddressesFromMoralis();
+      await this.fillToAddressWithData(walletData, toAddresses, currentBlock);
+      await this.writeDataToMongo(walletData);
+      const now = new Date();
+      console.log(
+        '--> Data refresed at Block : ',
+        currentBlock,
+        ' and time : ',
+        Math.floor(now.getTime() / 1000),
+      );
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  private async writeDataToMongo(walletData: wallet[]) {
+    try {
+      let quries = [];
+      for (let i = 0; i < _.size(walletData); i++) {
+        const query = {
+          updateOne: {
+            filter: { address: walletData[i].address },
+            update: {
+              balance: walletData[i].balance,
+              blockLastSynced: walletData[i].blockLastSynced,
+            },
+            upsert: true,
+          },
+        };
+        quries.push(query);
+      }
+
+      const now = new Date();
+      const query = {
+        updateOne: {
+          filter: { address: AddressZero },
+          update: {
+            balance: '0',
+            blockLastSynced: Math.floor(now.getTime() / 1000),
+          },
+          upsert: true,
+        },
+      };
+      quries.push(query);
+
+      await wallets.bulkWrite(quries);
+    } catch (e) {
+      console.log(e);
+    }
+  }
   private async getToAddressesFromMoralis() {
     try {
       const address = CONTRACT_ADDRESS;
@@ -157,6 +194,7 @@ export class APIservice {
   }
 
   private async connectToMongo() {
+    mongoose.set('strictQuery', true);
     mongoose
       .connect(configService.getValue('MONGO_URL'), {
         useNewUrlParser: true,
@@ -167,5 +205,8 @@ export class APIservice {
         console.log(`MONGO CONNECTION ERROR!`);
         console.log(err);
       });
+  }
+  public async delay(seconds: number) {
+    return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
   }
 }

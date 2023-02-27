@@ -8,29 +8,29 @@ import { ValidationPipe } from '@nestjs/common';
 //import * as compression from 'compression';
 var compression = require('compression');
 
-// const expressServer = express();
-// const createFunction = async (expressInstance): Promise<void> => {
-//   const app = await NestFactory.create(
-//     AppModule,
-//     new ExpressAdapter(expressInstance),
-//   );
+const expressServer = express();
+const createFunction = async (expressInstance): Promise<void> => {
+  const app = await NestFactory.create(
+    AppModule,
+    new ExpressAdapter(expressInstance),
+  );
 
-//   app.use(compression());
-//   app.useGlobalPipes(new ValidationPipe());
-//   app.enableCors();
-//   await app.init();
-// };
+  app.use(compression());
+  app.useGlobalPipes(new ValidationPipe());
+  app.enableCors();
+  await app.init();
+};
 
-// export const snipeOnly = functions
-//   .runWith({
-//     timeoutSeconds: 300,
-//     memory: '1GB',
-//   })
-//   .region('asia-east1')
-//   .https.onRequest(async (request, response) => {
-//     await createFunction(expressServer);
-//     expressServer(request, response);
-//   });
+export const api = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: '1GB',
+  })
+  .region('asia-east1')
+  .https.onRequest(async (request, response) => {
+    await createFunction(expressServer);
+    expressServer(request, response);
+  });
 
 async function bootstrap(runLocal: Boolean) {
   if (runLocal) {
@@ -43,8 +43,6 @@ async function bootstrap(runLocal: Boolean) {
     const _port = 3000;
     await app.listen(_port);
     console.log('-> Server listening at Port : ', _port);
-  } else {
-    await this.snipeOnly();
   }
 }
-bootstrap(true);
+bootstrap(false);
