@@ -6,6 +6,8 @@ import Moralis from 'moralis';
 import { EvmChain } from '@moralisweb3/common-evm-utils';
 
 import wallets from 'src/models/wallets';
+import cohorts from 'src/models/cohorts';
+
 import { configService } from '../config/configuration';
 import { contractAbi } from '../config/abi';
 
@@ -13,7 +15,9 @@ const axios = require('axios');
 const _ = require('lodash');
 const mongoose = require('mongoose');
 
-const CONTRACT_ADDRESS = configService.getValue('CONTRACT_ADDRESS');
+const TOKEN_ADDRESS = configService.getValue('TOKEN_ADDRESS');
+const COHORT_ADDRESS = configService.getValue('COHORT_ADDRESS');
+
 const rpcUrl = configService.getValue('RPC');
 const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
 const AddressZero: string = ethers.constants.AddressZero;
@@ -25,9 +29,46 @@ interface wallet {
   blockLastSynced: number;
 }
 
+interface cohort {
+  name: string;
+  index: number;
+  admin: string;
+  blockLastSynced: number;
+  merkleRoot: string;
+  exists: boolean;
+}
+
 @Injectable()
 export class APIservice {
   constructor() {}
+
+  public async getCohorts() {
+    try {
+      await this.connectToMongo();
+
+      const tr = (await cohorts.count()) - 1;
+      const mongoResult = await cohorts
+        .find({})
+        .select(['-_id'])
+        .sort({ blockLastSynced: 'asc' })
+        .lean();
+
+      const now = new Date();
+
+      if (_.size(mongoResult) == 0) {
+        this.refreshCohorts();
+      } else if (
+        mongoResult[tr]?.blockLastSynced + 10 <
+        Math.floor(now.getTime() / 1000)
+      ) {
+        this.refreshCohorts();
+      }
+      mongoResult.pop();
+      return { res: mongoResult, tr: tr };
+    } catch (e) {
+      console.log(e);
+    }
+  }
 
   public async getBalance(
     address: string,
@@ -69,9 +110,10 @@ export class APIservice {
       const walletData: wallet[] = [];
 
       const currentBlock = await provider.getBlockNumber();
-      const toAddresses = await this.getToAddressesFromMoralis();
+      let toAddresses = await this.getToAddressesFromMoralis();
+      toAddresses = await this.removeDuplicates(toAddresses);
       await this.fillToAddressWithData(walletData, toAddresses, currentBlock);
-      await this.writeDataToMongo(walletData);
+      await this.writeWalletDataToMongo(walletData);
       const now = new Date();
       console.log(
         '--> Data refresed at Block : ',
@@ -84,7 +126,106 @@ export class APIservice {
     }
   }
 
-  private async writeDataToMongo(walletData: wallet[]) {
+  private async refreshCohorts() {
+    try {
+      const cohortData: cohort[] = [];
+
+      const cohortAbi: ContractInterface = [
+        {
+          inputs: [],
+          name: 'totalCohorts',
+          outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+          stateMutability: 'view',
+          type: 'function',
+        },
+        {
+          inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+          name: 'cohortMap',
+          outputs: [
+            { internalType: 'string', name: 'name', type: 'string' },
+            { internalType: 'address', name: 'admin', type: 'address' },
+            { internalType: 'bytes32', name: 'merkleRoot', type: 'bytes32' },
+            { internalType: 'bool', name: 'exists', type: 'bool' },
+          ],
+          stateMutability: 'view',
+          type: 'function',
+        },
+      ];
+
+      const contract = new ethers.Contract(COHORT_ADDRESS, cohortAbi, provider);
+
+      const cohortCount = (await contract.totalCohorts()).toNumber();
+      const cohortMapPromises = [];
+      // for (let i = 0; i < cohortCount; i++) {
+      for (let i = 0; i < 1; i++) {
+        const value = await contract.cohortMap(i);
+        const query = {
+          updateOne: {
+            filter: { id: i },
+            update: {
+              name: value.name,
+              admin: value.admin,
+              merkleRoot: value.merkleRoot,
+              exists: value.exists,
+              blockLastSynced: 0,
+              id: i,
+            },
+            upsert: true,
+          },
+        };
+        cohortMapPromises.push(query);
+      }
+      const now = new Date();
+
+      const zeroSetup = {
+        updateOne: {
+          filter: { id: -1 },
+          update: {
+            name: AddressZero,
+            admin: AddressZero,
+            merkleRoot: AddressZero,
+            exists: true,
+            blockLastSynced: Math.floor(now.getTime() / 1000),
+            id: -1,
+          },
+          upsert: true,
+        },
+      };
+      cohortMapPromises.push(zeroSetup);
+      await cohorts.bulkWrite(cohortMapPromises);
+
+      // for (let i = 0; i < cohortCount; i++) {
+      //   cohortMapPromises.push(contract.cohortMap(i));
+      // }
+
+      // const cohortDataToDB: cohort[] = [];
+      // const cohortMapResult = await Promise.all(cohortMapPromises).then(
+      //   (values) => {
+      //     for (let i = 0; i < _.size(values); i++) {
+      //       const cohortData: cohort = {
+      //         name: values[i].name,
+      //         admin: values[i].admin,
+      //         merkleRoot: values[i].merkleRoot,
+      //         exists: values[i].exists,
+      //         index: i,
+      //         blockLastSynced: 0,
+      //       };
+      //       cohortDataToDB.push();
+      //     }
+      //   },
+      // );
+      // console.log('--> cohortMapResult : ', cohortMapResult);
+
+      console.log(
+        '--> Cohorts refresed at time : ',
+        Math.floor(now.getTime() / 1000),
+      );
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  private async writeWalletDataToMongo(walletData: wallet[]) {
     try {
       let quries = [];
       for (let i = 0; i < _.size(walletData); i++) {
@@ -121,7 +262,7 @@ export class APIservice {
   }
   private async getToAddressesFromMoralis() {
     try {
-      const address = CONTRACT_ADDRESS;
+      const address = TOKEN_ADDRESS;
       const response = await Moralis.EvmApi.token.getTokenTransfers({
         address,
         chain,
@@ -141,6 +282,14 @@ export class APIservice {
     } catch (e) {
       console.log(e);
     }
+  }
+
+  private async removeDuplicates<T>(array: T[]): Promise<T[]> {
+    const map = new Map();
+    for (const item of array) {
+      map.set(item, item);
+    }
+    return Array.from(map.values());
   }
 
   private async fillToAddressWithData(
@@ -165,7 +314,7 @@ export class APIservice {
   private async getBalanceOfAddress(address: string): Promise<string> {
     try {
       const contract = new ethers.Contract(
-        CONTRACT_ADDRESS,
+        TOKEN_ADDRESS,
         contractAbi,
         provider,
       );

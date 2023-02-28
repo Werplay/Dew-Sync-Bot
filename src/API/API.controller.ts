@@ -23,9 +23,10 @@ export class APIcontroller {
   }
 
   private async test() {
-    for (let i = 0; i < 20; i++) {
-      await this.getBalance([]);
-      await this.apiService.delay(2);
+    for (let i = 0; i < 2; i++) {
+      // await this.getBalance([]);
+      console.log(await this.getCohorts());
+      await this.apiService.delay(5);
     }
   }
 
@@ -52,6 +53,21 @@ export class APIcontroller {
         page,
         order,
       );
+      res['data'] = temp['res'];
+      res['tr'] = temp['tr'];
+
+      return res;
+    } catch (e) {
+      console.error(e);
+      throw new HttpException(`Invalid Params`, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  @Post('cohorts') async getCohorts() {
+    let res = { tr: 0, data: null };
+
+    try {
+      const temp = await this.apiService.getCohorts();
       res['data'] = temp['res'];
       res['tr'] = temp['tr'];
 

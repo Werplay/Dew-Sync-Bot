@@ -28,7 +28,13 @@ class ConfigService {
   }
 }
 
-const requiredConfig = ['MONGO_URL', 'MORALIS_KEY', 'RPC', 'CONTRACT_ADDRESS'];
+const requiredConfig = [
+  'MONGO_URL',
+  'MORALIS_KEY',
+  'RPC',
+  'TOKEN_ADDRESS',
+  'COHORT_ADDRESS',
+];
 
 const configService = new ConfigService(process.env).ensureValues(
   requiredConfig,
