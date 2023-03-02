@@ -80,11 +80,11 @@ export class APIservice {
       await this.connectToMongo();
       await this.connectToMoralis();
 
-      const tr = await wallets.count();
+      const tr = (await wallets.count()) - 1;
       const mongoResult = await wallets
         .find({})
         .select(['-_id'])
-        .sort({ blockLastSynced: 'desc' })
+        .sort({ blockLastSynced: 'asc' })
         .lean();
 
       const now = new Date();
@@ -98,6 +98,8 @@ export class APIservice {
         this.refreshTokenHolders();
       }
 
+      mongoResult.pop();
+
       return { res: mongoResult, tr: tr };
     } catch (e) {
       console.log(e);
@@ -105,7 +107,7 @@ export class APIservice {
     }
   }
 
-  private async refreshTokenHolders() {
+  public async refreshTokenHolders() {
     try {
       const walletData: wallet[] = [];
 
@@ -116,7 +118,7 @@ export class APIservice {
       await this.writeWalletDataToMongo(walletData);
       const now = new Date();
       console.log(
-        '--> Data refresed at Block : ',
+        '--> Token Holders refresed at Block : ',
         currentBlock,
         ' and time : ',
         Math.floor(now.getTime() / 1000),
@@ -126,7 +128,7 @@ export class APIservice {
     }
   }
 
-  private async refreshCohorts() {
+  public async refreshCohorts() {
     try {
       const cohortData: cohort[] = [];
 
@@ -156,8 +158,7 @@ export class APIservice {
 
       const cohortCount = (await contract.totalCohorts()).toNumber();
       const cohortMapPromises = [];
-      // for (let i = 0; i < cohortCount; i++) {
-      for (let i = 0; i < 1; i++) {
+      for (let i = 0; i < cohortCount; i++) {
         const value = await contract.cohortMap(i);
         const query = {
           updateOne: {

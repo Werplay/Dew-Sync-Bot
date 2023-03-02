@@ -26,6 +26,10 @@ class ConfigService {
     const mode = this.getValue('MODE', false);
     return mode != 'DEV';
   }
+
+  public getCorsOrigin() {
+    return this.getValue('CORS_ORIGIN').split(',');
+  }
 }
 
 const requiredConfig = [
@@ -34,6 +38,7 @@ const requiredConfig = [
   'RPC',
   'TOKEN_ADDRESS',
   'COHORT_ADDRESS',
+  'CORS_ORIGIN',
 ];
 
 const configService = new ConfigService(process.env).ensureValues(

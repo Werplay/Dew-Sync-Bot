@@ -5,8 +5,10 @@ import * as functions from 'firebase-functions';
 
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { configService } from './config/configuration';
 //import * as compression from 'compression';
 var compression = require('compression');
+const CORS_ORIGIN = configService.getCorsOrigin();
 
 const expressServer = express();
 const createFunction = async (expressInstance): Promise<void> => {
@@ -17,7 +19,10 @@ const createFunction = async (expressInstance): Promise<void> => {
 
   app.use(compression());
   app.useGlobalPipes(new ValidationPipe());
-  app.enableCors();
+  app.enableCors({
+    // origin: CORS_ORIGIN,
+    // credentials: true,
+  });
   await app.init();
 };
 
