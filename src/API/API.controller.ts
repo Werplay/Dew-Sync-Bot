@@ -63,6 +63,9 @@ export class APIcontroller {
     }
   }
 
+  @Get('stats') async getStats() {
+    return this.apiService.getStats();
+  }
   @Post('cohorts') async getCohorts() {
     let res = { tr: 0, data: null };
 

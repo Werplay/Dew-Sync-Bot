@@ -10,6 +10,7 @@ import cohorts from 'src/models/cohorts';
 
 import { configService } from '../config/configuration';
 import { contractAbi } from '../config/abi';
+import { cohortAbi } from '../config/cohort.abi';
 
 const axios = require('axios');
 const _ = require('lodash');
@@ -50,7 +51,7 @@ export class APIservice {
       const mongoResult = await cohorts
         .find({})
         .select(['-_id'])
-        .sort({ blockLastSynced: 'asc' })
+        .sort({ blockLastSynced: 'desc' })
         .lean();
 
       const now = new Date();
@@ -58,11 +59,13 @@ export class APIservice {
       if (_.size(mongoResult) == 0) {
         this.refreshCohorts();
       } else if (
-        mongoResult[tr]?.blockLastSynced + 10 <
+        mongoResult[0]?.blockLastSynced + 10 <
         Math.floor(now.getTime() / 1000)
       ) {
         this.refreshCohorts();
       }
+
+      _.reverse(mongoResult);
       mongoResult.pop();
       return { res: mongoResult, tr: tr };
     } catch (e) {
@@ -77,14 +80,13 @@ export class APIservice {
     order: string,
   ) {
     try {
-      await this.connectToMongo();
-      await this.connectToMoralis();
+      await Promise.all([this.connectToMongo(), this.connectToMoralis()]);
 
       const tr = (await wallets.count()) - 1;
       const mongoResult = await wallets
         .find({})
         .select(['-_id'])
-        .sort({ blockLastSynced: 'asc' })
+        .sort({ blockLastSynced: 'desc' })
         .lean();
 
       const now = new Date();
@@ -98,9 +100,45 @@ export class APIservice {
         this.refreshTokenHolders();
       }
 
+      _.reverse(mongoResult);
       mongoResult.pop();
 
       return { res: mongoResult, tr: tr };
+    } catch (e) {
+      console.log(e);
+      return HttpStatus.BAD_REQUEST;
+    }
+  }
+
+  public async getStats() {
+    try {
+      const tokenContract = new ethers.Contract(
+        TOKEN_ADDRESS,
+        contractAbi,
+        provider,
+      );
+
+      const totalSupply = parseFloat(
+        ethers.utils.formatEther(await tokenContract.totalSupply()).toString(),
+      );
+
+      const cohortContract = new ethers.Contract(
+        COHORT_ADDRESS,
+        cohortAbi,
+        provider,
+      );
+
+      const totalProposals = (await cohortContract.totalProposals()).toNumber();
+
+      const totalCohorts = (await cohortContract.totalCohorts()).toNumber();
+
+      const res = {
+        totalSupply: totalSupply,
+        totalProposals: totalProposals,
+        totalCohorts: totalCohorts,
+      };
+
+      return res;
     } catch (e) {
       console.log(e);
       return HttpStatus.BAD_REQUEST;
@@ -299,14 +337,21 @@ export class APIservice {
     currentBlock: number,
   ) {
     try {
-      for (let i = 0; i < _.size(toAddresses); i++) {
+      const promisList = [];
+      const onePromise = async (i: number) => {
         const temp: wallet = {
           address: toAddresses[i],
           blockLastSynced: currentBlock,
           balance: await this.getBalanceOfAddress(toAddresses[i]),
         };
         walletData.push(temp);
+      };
+
+      for (let i = 0; i < _.size(toAddresses); i++) {
+        promisList.push(onePromise(i));
       }
+
+      await Promise.all(promisList);
     } catch (e) {
       console.log(e);
     }
