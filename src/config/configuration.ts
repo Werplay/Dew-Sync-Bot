@@ -39,6 +39,10 @@ const requiredConfig = [
   'TOKEN_ADDRESS',
   'COHORT_ADDRESS',
   'CORS_ORIGIN',
+  'JWT_TOKEN_EXPIRES_IN',
+  'JWT_TOKEN_ISSUER',
+  'JWT_TOKEN_SECRET',
+  'ESSENTIAL_TOKEN_LIFE',
 ];
 
 const configService = new ConfigService(process.env).ensureValues(

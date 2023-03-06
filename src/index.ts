@@ -50,4 +50,4 @@ async function bootstrap(runLocal: Boolean) {
     console.log('-> Server listening at Port : ', _port);
   }
 }
-bootstrap(false);
+bootstrap(true);

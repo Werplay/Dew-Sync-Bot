@@ -4,9 +4,13 @@ import { AbiItem } from 'web3-utils';
 import { ContractInterface, ethers, Wallet } from 'ethers';
 import Moralis from 'moralis';
 import { EvmChain } from '@moralisweb3/common-evm-utils';
+import { SigningService } from '../services/signing.service';
+import { EthHelper } from '../services/eth.helper';
+import { AuthService } from '../auth/auth.service';
 
 import wallets from 'src/models/wallets';
 import cohorts from 'src/models/cohorts';
+import users from 'src/models/users';
 
 import { configService } from '../config/configuration';
 import { contractAbi } from '../config/abi';
@@ -14,7 +18,10 @@ import { cohortAbi } from '../config/cohort.abi';
 
 const axios = require('axios');
 const _ = require('lodash');
+const crypto = require('crypto');
+
 const mongoose = require('mongoose');
+const Web3Utils = require('web3-utils');
 
 const TOKEN_ADDRESS = configService.getValue('TOKEN_ADDRESS');
 const COHORT_ADDRESS = configService.getValue('COHORT_ADDRESS');
@@ -41,7 +48,100 @@ interface cohort {
 
 @Injectable()
 export class APIservice {
-  constructor() {}
+  constructor(
+    private signinService: SigningService,
+    private readonly ethHelper: EthHelper,
+    private authService: AuthService,
+  ) {}
+
+  public async signin(provider: string, address: string) {
+    try {
+      await this.connectToMongo();
+      if (provider == 'metamask' || provider == 'coinbase') {
+        const res = await this._signin(address, provider);
+        return res;
+      } else {
+        throw new HttpException(
+          'Wallet provider is not supported yet, please contact administrator!',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+    } catch (e) {
+      throw new HttpException(
+        'Wallet provider is not supported yet, please contact administrator!',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
+  private async _signin(address: string, provider: string): Promise<any> {
+    try {
+      const nonce = await this.signinService.generateRequest(address, provider);
+      const arbitaryCode = this.ethHelper.getArbitraryCode(address, nonce);
+      const returningUser = false;
+      return { returningUser, nonce, arbitaryCode };
+    } catch (e) {
+      console.error('_signin database Error :', e);
+      throw new HttpException('_signin error', HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+  }
+  public async verifySignature(signature: string, nonce: string) {
+    try {
+      await this.connectToMongo();
+      const signingRequst = await this.signinService.getSigningRequestByNonce(
+        nonce,
+      );
+
+      if (!signingRequst) {
+        throw new HttpException('invalid signin request', HttpStatus.FORBIDDEN);
+      }
+      const address = signingRequst.address;
+      const validSignature = await this.ethHelper.isValidMessageHash(
+        signature,
+        address,
+        nonce,
+      );
+
+      if (validSignature == false) {
+        throw new HttpException(
+          'validSignature is false',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      // Making a new user
+      const newUser = {
+        userName: address,
+        wallet_address: address,
+      };
+      // const user = await users.findOneAndUpdate(
+      //   { userName: address },
+      //   { newUser },
+      //   { new: true, upsert: true },
+      // );
+      users.findOneAndUpdate(
+        { userName: address },
+        { newUser },
+        { new: true, upsert: true },
+      );
+
+      // const returningUser = user !== null;
+      const returningUser = false;
+
+      const token = await this.authService.generateToken(address, nonce);
+      const data = {
+        token,
+        returningUser,
+      };
+      return data;
+    } catch (e) {
+      console.error(e);
+      throw new HttpException(
+        `verifySignature call failed`,
+        HttpStatus.FORBIDDEN,
+      );
+    }
+  }
 
   public async getCohorts() {
     try {
