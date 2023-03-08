@@ -109,21 +109,18 @@ export class APIservice {
         );
       }
 
-      // Making a new user
-      const newUser = {
-        userName: address,
-        wallet_address: address,
+      const query = {
+        updateOne: {
+          filter: { userName: address },
+          update: {
+            wallet_address: address,
+            userName: address,
+          },
+          upsert: true,
+        },
       };
-      // const user = await users.findOneAndUpdate(
-      //   { userName: address },
-      //   { newUser },
-      //   { new: true, upsert: true },
-      // );
-      users.findOneAndUpdate(
-        { userName: address },
-        { newUser },
-        { new: true, upsert: true },
-      );
+
+      await users.bulkWrite([query]);
 
       // const returningUser = user !== null;
       const returningUser = false;

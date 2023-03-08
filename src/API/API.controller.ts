@@ -35,6 +35,10 @@ export class APIcontroller {
   }
 
   private async test() {
+    console.log(await this.getBalance([]));
+    console.log(await this.getCohorts());
+    return;
+
     const web3 = new Web3();
     const wallet = '0xF3c42432e52dfd5b765dd428E3F31F10194dAa16';
     const privateKey =
