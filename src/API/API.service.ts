@@ -54,6 +54,11 @@ export class APIservice {
     private authService: AuthService,
   ) {}
 
+  public async updateNames() {
+    await this.connectToMongo();
+    await cohorts.find().updateMany({ adminName: 'admin' }).lean();
+  }
+
   public async signin(provider: string, address: string) {
     try {
       await this.connectToMongo();
