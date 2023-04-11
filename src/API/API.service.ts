@@ -444,10 +444,12 @@ export class APIservice {
       const resJSON = response.toJSON().result;
       for (let i = 0; i < _.size(resJSON); i++) {
         if (resJSON[i]?.data?.from != AddressZero) {
-          toAddresses.push(resJSON[i]?.data?.from);
+          const value = resJSON[i]?.data?.from;
+          toAddresses.push(ethers.utils.getAddress(value));
         }
         if (resJSON[i]?.data?.to != AddressZero) {
-          toAddresses.push(resJSON[i]?.data?.to);
+          const value = resJSON[i]?.data?.to;
+          toAddresses.push(ethers.utils.getAddress(value));
         }
       }
 
