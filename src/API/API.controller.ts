@@ -35,8 +35,9 @@ export class APIcontroller {
   }
 
   private async test() {
-    // await this.apiService.updateNames();
-    // return;
+    const res = await this.getBalance([]);
+    console.log(res);
+    return;
     console.log(await this.getBalance([]));
     console.log(await this.getCohorts());
 

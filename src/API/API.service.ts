@@ -15,6 +15,7 @@ import users from 'src/models/users';
 import { configService } from '../config/configuration';
 import { contractAbi } from '../config/abi';
 import { cohortAbi } from '../config/cohort.abi';
+import { add } from 'lodash';
 
 const axios = require('axios');
 const _ = require('lodash');
@@ -250,7 +251,6 @@ export class APIservice {
   public async refreshTokenHolders() {
     try {
       const walletData: wallet[] = [];
-
       const currentBlock = await provider.getBlockNumber();
       let toAddresses = await this.getToAddressesFromMoralis();
       toAddresses = await this.removeDuplicates(toAddresses);
@@ -403,22 +403,76 @@ export class APIservice {
   }
   private async getToAddressesFromMoralis() {
     try {
+      let toAddresses: string[] = [];
       const address = TOKEN_ADDRESS;
-      const response = await Moralis.EvmApi.token.getTokenTransfers({
+
+      const topic =
+        '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+      const abi = {
+        anonymous: false,
+        inputs: [
+          {
+            indexed: true,
+            internalType: 'address',
+            name: 'from',
+            type: 'address',
+          },
+          {
+            indexed: true,
+            internalType: 'address',
+            name: 'to',
+            type: 'address',
+          },
+          {
+            indexed: false,
+            internalType: 'uint256',
+            name: 'amount',
+            type: 'uint256',
+          },
+        ],
+        name: 'Transfer',
+        type: 'event',
+      };
+
+      const response = await Moralis.EvmApi.events.getContractEvents({
         address,
         chain,
+        topic,
+        abi,
       });
-
-      // console.log(response.toJSON());
-
-      let toAddresses: string[] = [];
-      for (let i = 0; i < _.size(response?.result); i++) {
-        const toAddress = response?.result[i]?.toAddress?.checksum;
-        if (toAddress != AddressZero) {
-          toAddresses.push(toAddress);
+      const resJSON = response.toJSON().result;
+      for (let i = 0; i < _.size(resJSON); i++) {
+        if (resJSON[i]?.data?.from != AddressZero) {
+          toAddresses.push(resJSON[i]?.data?.from);
+        }
+        if (resJSON[i]?.data?.to != AddressZero) {
+          toAddresses.push(resJSON[i]?.data?.to);
         }
       }
 
+      // const response =
+      //   await Moralis.EvmApi.transaction.getWalletTransactionsVerbose({
+      //     address,
+      //     chain,
+      //   });
+
+      // const resJSON = response.toJSON().result;
+
+      // for (let i = 0; i < _.size(resJSON); i++) {
+      //   for (let j = 0; j < _.size(resJSON[i].logs); j++) {
+      //     // if (resJSON[i]?.logs[j]['decoded_event'].label == 'Transfer')
+      //     for (
+      //       let k = 0;
+      //       k < _.size(resJSON[i]?.logs[j]['decoded_event']?.params);
+      //       k++
+      //     ) {
+      //       const value = resJSON[i]?.logs[j]['decoded_event'].params[k]?.value;
+      //       if (value != AddressZero && ethers.utils.isAddress(value))
+      //         toAddresses.push(value);
+      //     }
+      //   }
+      // }
       return toAddresses;
     } catch (e) {
       console.log(e);
