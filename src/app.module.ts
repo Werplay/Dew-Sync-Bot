@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { APImodule } from './API/API.module';
+import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { BOTmodule } from "./BOT/BOT.module";
 
 @Module({
   imports: [
@@ -9,7 +9,7 @@ import { APImodule } from './API/API.module';
       ttl: 60,
       limit: 30,
     }),
-    APImodule,
+    BOTmodule,
   ],
   controllers: [],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
