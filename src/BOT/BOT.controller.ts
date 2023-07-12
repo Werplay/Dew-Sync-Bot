@@ -1,5 +1,6 @@
 import { BOTservice } from "./BOT.service";
 import { configService } from "../config/configuration";
+import { Controller } from "@nestjs/common";
 
 const EthUtil = require("ethereumjs-util");
 const Web3 = require("web3");
@@ -7,6 +8,7 @@ const Web3Utils = require("web3-utils");
 const _ = require("lodash");
 
 const REFRESH_DELAY = configService.getValue("REFRESH_DELAY");
+@Controller("")
 export class BOTcontroller {
   constructor(private readonly botService: BOTservice) {
     this.BOT_START();
@@ -18,7 +20,7 @@ export class BOTcontroller {
       try {
         await this.botService.makeConnections();
         await this.botService.start();
-        await this.botService.delay(REFRESH_DELAY);
+        await this.botService.delay(parseInt(REFRESH_DELAY));
       } catch (e) {
         console.log("---> BOT_START ERROR : ", e);
       }

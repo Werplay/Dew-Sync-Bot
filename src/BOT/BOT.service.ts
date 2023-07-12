@@ -46,23 +46,41 @@ interface cohort {
 export class BOTservice {
   constructor() {}
 
+  public async makeConnections() {
+    await this.connectToMongo();
+    await this.connectToMoralis();
+  }
+
   public async start() {
     try {
+      const _blockLastSynced = (
+        await wallets
+          .findOne({ address: AddressZero })
+          .select(["blockLastSynced", "-_id"])
+          .lean()
+      )["blockLastSynced"];
+
+      const _currentBlock = await provider.getBlockNumber();
+
+      this.refreshTokenHolders(_blockLastSynced, _currentBlock);
+      this.refreshCohorts(_currentBlock);
     } catch (e) {}
   }
 
-  public async refreshTokenHolders() {
+  public async refreshTokenHolders(
+    _blockLastSynced: number,
+    _currentBlock: number
+  ) {
     try {
       const walletData: wallet[] = [];
-      const currentBlock = await provider.getBlockNumber();
-      let toAddresses = await this.getToAddressesFromMoralis();
+      let toAddresses = await this.getToAddressesFromMoralis(_blockLastSynced);
       toAddresses = await this.removeDuplicates(toAddresses);
-      await this.fillToAddressWithData(walletData, toAddresses, currentBlock);
-      await this.writeWalletDataToMongo(walletData);
+      await this.fillToAddressWithData(walletData, toAddresses, _currentBlock);
+      await this.writeWalletDataToMongo(walletData, _currentBlock);
       const now = new Date();
       console.log(
         "--> Token Holders refresed at Block : ",
-        currentBlock,
+        _currentBlock,
         " and time : ",
         Math.floor(now.getTime() / 1000)
       );
@@ -71,7 +89,7 @@ export class BOTservice {
     }
   }
 
-  public async refreshCohorts() {
+  public async refreshCohorts(currentBlock: number) {
     try {
       const cohortData: cohort[] = [];
 
@@ -129,7 +147,7 @@ export class BOTservice {
             admin: AddressZero,
             merkleRoot: AddressZero,
             exists: true,
-            blockLastSynced: Math.floor(now.getTime() / 1000),
+            blockLastSynced: currentBlock,
             id: -1,
           },
           upsert: true,
@@ -147,7 +165,10 @@ export class BOTservice {
     }
   }
 
-  private async writeWalletDataToMongo(walletData: wallet[]) {
+  private async writeWalletDataToMongo(
+    walletData: wallet[],
+    currentBlock: number
+  ) {
     try {
       let quries = [];
       for (let i = 0; i < _.size(walletData); i++) {
@@ -170,7 +191,7 @@ export class BOTservice {
           filter: { address: AddressZero },
           update: {
             balance: "0",
-            blockLastSynced: Math.floor(now.getTime() / 1000),
+            blockLastSynced: currentBlock,
           },
           upsert: true,
         },
@@ -182,7 +203,7 @@ export class BOTservice {
       console.log(e);
     }
   }
-  private async getToAddressesFromMoralis() {
+  private async getToAddressesFromMoralis(_blockLastSynced: number) {
     try {
       let toAddresses: string[] = [];
       const address = TOKEN_ADDRESS;
@@ -220,6 +241,7 @@ export class BOTservice {
         address,
         chain,
         topic,
+        fromBlock: _blockLastSynced,
         abi,
       });
       const resJSON = response.toJSON().result;
@@ -289,11 +311,6 @@ export class BOTservice {
       //console.log('Contract does not have owner function');
       return "0";
     }
-  }
-
-  public async makeConnections() {
-    await this.connectToMongo();
-    await this.connectToMoralis();
   }
 
   private async connectToMoralis() {

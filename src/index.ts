@@ -8,7 +8,6 @@ async function bootstrap(runLocal: Boolean) {
   if (runLocal) {
     const app = await NestFactory.create(AppModule);
     app.useGlobalPipes(new ValidationPipe());
-    console.log("*** BOT STARTED ***");
   }
 }
 bootstrap(true);
